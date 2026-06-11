@@ -32,6 +32,7 @@ of others.
 | Dependency                    | License      |
 | :---------------------------- | :----------- |
 | `charm.land/bubbletea/v2`     | MIT          |
+| `charm.land/bubbles/v2`       | MIT          |
 | `charm.land/lipgloss/v2`      | MIT          |
 | `github.com/alexflint/go-arg` | BSD-2-Clause |
 | `github.com/go-git/go-git/v5` | Apache-2.0   |

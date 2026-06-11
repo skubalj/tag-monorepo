@@ -14,12 +14,14 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
 type model struct {
 	Rows           []Row
+	input          textinput.Model
 	cursor         int
 	viewportWidth  int
 	viewportHeight int
@@ -27,19 +29,22 @@ type model struct {
 }
 
 func initialModel(rows []Row) tea.Model {
-	return model{
-		Rows: rows,
+	input := textinput.New()
+	input.Prompt = "Update Suffix: "
+
+	return &model{
+		Rows:  rows,
+		input: input,
 	}
 }
 
-func (m model) Init() tea.Cmd {
+func (m *model) Init() tea.Cmd {
 	// Just return `nil`, which means "no I/O right now, please."
 	return nil
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-
 	case tea.WindowSizeMsg:
 		m.viewportHeight = msg.Width
 		m.viewportHeight = msg.Height - 2 // For top/bottom padding
@@ -51,54 +56,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Is it a key press?
 	case tea.KeyPressMsg:
-
-		// Cool, what was the actual key pressed?
-		switch msg.String() {
-
-		// These keys should exit the program.
-		case "ctrl+c", "q", "escape":
-			m.Rows = nil
-			return m, tea.Quit
-
-		case "enter":
-			return m, tea.Quit
-
-		case "0", "`":
-			m.Rows[m.cursor].AppliedChange = Update_None
-		case "1":
-			m.Rows[m.cursor].AppliedChange = Update_Major
-		case "2":
-			m.Rows[m.cursor].AppliedChange = Update_Minor
-		case "3":
-			m.Rows[m.cursor].AppliedChange = Update_Patch
-
-		// The "up" and "k" keys move the cursor up
-		case "up":
-			if m.cursor > 0 {
-				m.cursor--
-				if m.cursor < m.scroll {
-					m.scroll--
-				}
-			}
-
-		// The "down" and "j" keys move the cursor down
-		case "down":
-			if m.cursor < len(m.Rows)-1 {
-				m.cursor++
-				if m.cursor >= m.scroll+m.viewportHeight {
-					m.scroll++
-				}
-				// if m.cursor > m.viewportHeight {
-				// 	m.scroll++
-				// }
-			}
-
-		case "right":
-			m.Rows[m.cursor].AppliedChange = m.Rows[m.cursor].AppliedChange.Increment()
-
-		case "left":
-			m.Rows[m.cursor].AppliedChange = m.Rows[m.cursor].AppliedChange.Decrement()
+		if m.input.Focused() {
+			return m.modalUpdate(msg)
+		} else {
+			return m.mainUpdate(msg)
 		}
+
+	case applyInput:
+		m.input.Blur()
+		m.Rows[m.cursor].AppliedSuffix = msg.Value
+
+	case cancelModal:
+		m.input.Blur()
 	}
 
 	// Return the updated model to the Bubble Tea runtime for processing.
@@ -106,7 +75,87 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) View() tea.View {
+func (m *model) mainUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Cool, what was the actual key pressed?
+	switch msg.String() {
+
+	// These keys should exit the program.
+	case "ctrl+c", "q", "esc":
+		m.Rows = nil
+		return m, tea.Quit
+
+	case "enter":
+		return m, tea.Quit
+
+	case "0", "`":
+		m.Rows[m.cursor].AppliedChange = Update_None
+	case "1":
+		m.Rows[m.cursor].AppliedChange = Update_Major
+	case "2":
+		m.Rows[m.cursor].AppliedChange = Update_Minor
+	case "3":
+		m.Rows[m.cursor].AppliedChange = Update_Patch
+
+	// The "up" and "k" keys move the cursor up
+	case "up":
+		if m.cursor > 0 {
+			m.cursor--
+			if m.cursor < m.scroll {
+				m.scroll--
+			}
+		}
+
+	// The "down" and "j" keys move the cursor down
+	case "down":
+		if m.cursor < len(m.Rows)-1 {
+			m.cursor++
+			if m.cursor >= m.scroll+m.viewportHeight {
+				m.scroll++
+			}
+		}
+
+	case "right":
+		m.Rows[m.cursor].AppliedChange = m.Rows[m.cursor].AppliedChange.Increment()
+
+	case "left":
+		m.Rows[m.cursor].AppliedChange = m.Rows[m.cursor].AppliedChange.Decrement()
+
+	case "s":
+		row := m.Rows[m.cursor]
+		suffix := row.AppliedSuffix
+		if suffix == "" && row.Version != nil {
+			suffix = row.Version.Suffix
+		}
+		m.input.SetValue(suffix)
+		m.input.Focus()
+	}
+
+	return m, nil
+}
+
+type cancelModal struct{}
+type applyInput struct{ Value string }
+
+func (m *model) modalUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Cool, what was the actual key pressed?
+	var cmd tea.Cmd
+
+	switch msg.String() {
+	case "ctrl+c":
+		m.Rows = nil
+		return m, tea.Quit
+	case "esc":
+		return m, func() tea.Msg { return cancelModal{} }
+	case "enter":
+		return m, func() tea.Msg { return applyInput{m.input.Value()} }
+	default:
+		m.input, cmd = m.input.Update(msg)
+	}
+
+	return m, cmd
+}
+
+func (m *model) View() tea.View {
 	var v tea.View
 	v.AltScreen = true
 
@@ -138,7 +187,7 @@ func (m model) View() tea.View {
 		if row.Version != nil {
 			versionString.WriteRune('/')
 
-			if row.AppliedChange != Update_None {
+			if row.AppliedChange != Update_None || row.AppliedSuffix != "" {
 				versionString.WriteString(fromStyle.Render(row.Version.String()))
 				versionString.WriteString(rowStyle.Render(" -> "))
 				versionString.WriteString(toStyle.Render(row.UpdateVersion().String()))
@@ -146,17 +195,22 @@ func (m model) View() tea.View {
 			} else {
 				versionString.WriteString(row.Version.String())
 			}
-		} else if row.AppliedChange != Update_None {
+		} else if row.AppliedChange != Update_None || row.AppliedSuffix != "" {
 			versionString.WriteRune('/')
 			versionString.WriteString(toStyle.Render(row.UpdateVersion().String()))
 			versionString.WriteString(rowStyle.Render(fmt.Sprintf(" (Tag %s)", row.AppliedChange)))
 		}
 
 		buf.WriteString(rowStyle.Render(row.Module + versionString.String()))
+
+		if selected && m.input.Focused() {
+			buf.WriteString(m.input.View())
+		}
+
 		buf.WriteRune('\n')
 	}
 
-	out := lipgloss.NewStyle().Foreground(lipgloss.BrightBlack).Render(`0: Clear Update   1: Update Major   2: Update Minor   3: Update Patch   Enter: Accept     Q: Abort`)
+	out := lipgloss.NewStyle().Foreground(lipgloss.BrightBlack).Render(`0: Clear Update   1: Update Major   2: Update Minor   3: Update Patch   S: Update Suffix   Enter: Accept     Q: Abort`)
 	buf.WriteString(out)
 
 	v.SetContent(buf.String())

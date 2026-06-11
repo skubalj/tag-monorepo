@@ -66,7 +66,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	typedModel, ok := m.(model)
+	typedModel, ok := m.(*model)
 	if !ok {
 		return
 	}
