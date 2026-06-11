@@ -9,8 +9,11 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
+	"slices"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/alexflint/go-arg"
@@ -20,7 +23,12 @@ import (
 
 type Args struct {
 	Copyright      bool   `arg:"-c,--copyright" help:"display GPL copyright notice"`
-	RepositoryPath string `arg:"positional" default:"." help:"Path to the git repo to be searched"`
+	MaxDepth       int    `arg:"-d,--max-depth" help:"show all directories up to the given depth"`
+	RepositoryPath string `arg:"positional" default:"." placeholder:"REPOSITORY_PATH" help:"path to the git repo to be searched"`
+}
+
+func (Args) Version() string {
+	return "tag-monorepo 0.0.1"
 }
 
 func (Args) Epilogue() string {
@@ -59,6 +67,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Apply max-depth, but preserve anything with tags
+	rows = slices.DeleteFunc(rows, func(r Row) bool {
+		return r.Version == nil && strings.Count(r.Module, "/") >= args.MaxDepth
+	})
+
 	p := tea.NewProgram(initialModel(rows))
 	m, err := p.Run()
 	if err != nil {
@@ -73,7 +86,7 @@ func main() {
 
 	var tags []string
 	for _, row := range typedModel.Rows {
-		if row.AppliedChange != Update_None {
+		if row.NeedsUpdate() {
 			tags = append(tags, row.UpdateTagName())
 		}
 	}
@@ -87,17 +100,18 @@ func main() {
 
 // Get the given tags
 func getTags(repositoryPath string) ([]Row, error) {
-	entries, err := os.ReadDir(repositoryPath)
+	var modules []string
+	err := fs.WalkDir(os.DirFS(repositoryPath), ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && !strings.HasPrefix(path, ".git") {
+			modules = append(modules, path)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	// Take the top level directories as module names
-	modules := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() && entry.Name() != ".git" {
-			modules = append(modules, entry.Name())
-		}
 	}
 
 	// Inspect the git repo and analyze the tags
@@ -181,7 +195,7 @@ func createTags(path string, tags []string) error {
 	}
 
 	for _, tag := range tags {
-		fmt.Printf("Creating tag %s\n", tag)
+		fmt.Printf("Creating tag '%s'\n", tag)
 		_, err = repo.CreateTag(tag, head.Hash(), nil)
 		if err != nil {
 			return err

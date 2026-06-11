@@ -21,7 +21,7 @@ tag manually in more "interesting" cases.
 ## Installation
 
 ```bash
-go install github.com/skubalj/tag-monorepo
+go install github.com/skubalj/tag-monorepo@latest
 ```
 
 ## Acknowledgements

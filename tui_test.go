@@ -20,6 +20,30 @@ func TestUpdate(t *testing.T) {
 	require.Equal(t, Update_Patch, Update_None.Decrement())
 }
 
+func Test_Row_suffixUpdated(t *testing.T) {
+	{
+		row := Row{Version: new(mustVersion("v1.0.0")), AppliedSuffix: ""}
+		require.False(t, row.suffixUpdated())
+	}
+	{
+		row := Row{Version: new(mustVersion("v1.0.0-beta")), AppliedSuffix: ""}
+		require.True(t, row.suffixUpdated())
+	}
+	{
+		row := Row{Version: new(mustVersion("v1.0.0")), AppliedSuffix: "beta1"}
+		require.True(t, row.suffixUpdated())
+	}
+	{
+		row := Row{Version: new(mustVersion("v0.0.0-beta")), AppliedSuffix: "beta"}
+		require.False(t, row.suffixUpdated())
+	}
+}
+
+func mustVersion(version string) Version {
+	v, _ := ParseVersion(version)
+	return v
+}
+
 func TestVersion(t *testing.T) {
 	require.Equal(t, "v1.0.0", Version{Major: 1}.String())
 	require.Equal(t, "v5.4.0", Version{Major: 5, Minor: 4}.String())

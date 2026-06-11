@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -75,29 +76,60 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+type mainKeymapType struct {
+	Quit            key.Binding
+	Apply           key.Binding
+	NoUpdate        key.Binding
+	UpdateMajor     key.Binding
+	UpdateMinor     key.Binding
+	UpdatePatch     key.Binding
+	ScrollUp        key.Binding
+	ScrollDown      key.Binding
+	IncrementUpdate key.Binding
+	DecrementUpdate key.Binding
+	EditSuffix      key.Binding
+}
+
+var mainKeymap = mainKeymapType{
+	Quit:            key.NewBinding(key.WithKeys("ctrl+c", "q", "esc"), key.WithHelp("Q/Esc", "Abort")),
+	Apply:           key.NewBinding(key.WithKeys("enter"), key.WithHelp("Enter", "Accept")),
+	NoUpdate:        key.NewBinding(key.WithKeys("0", "`"), key.WithHelp("0", "Clear Update")),
+	UpdateMajor:     key.NewBinding(key.WithKeys("1"), key.WithHelp("1", "Update Major")),
+	UpdateMinor:     key.NewBinding(key.WithKeys("2"), key.WithHelp("2", "Update Minor")),
+	UpdatePatch:     key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "Update Patch")),
+	ScrollUp:        key.NewBinding(key.WithKeys("up")),
+	ScrollDown:      key.NewBinding(key.WithKeys("down")),
+	IncrementUpdate: key.NewBinding(key.WithKeys("right")),
+	DecrementUpdate: key.NewBinding(key.WithKeys("left")),
+	EditSuffix:      key.NewBinding(key.WithKeys("s"), key.WithHelp("S", "Update Suffix")),
+}
+
 func (m *model) mainUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Cool, what was the actual key pressed?
-	switch msg.String() {
+	switch {
 
 	// These keys should exit the program.
-	case "ctrl+c", "q", "esc":
+	case key.Matches(msg, mainKeymap.Quit):
 		m.Rows = nil
 		return m, tea.Quit
 
-	case "enter":
+	case key.Matches(msg, mainKeymap.Apply):
 		return m, tea.Quit
 
-	case "0", "`":
+	case key.Matches(msg, mainKeymap.NoUpdate):
 		m.Rows[m.cursor].AppliedChange = Update_None
-	case "1":
+
+	case key.Matches(msg, mainKeymap.UpdateMajor):
 		m.Rows[m.cursor].AppliedChange = Update_Major
-	case "2":
+
+	case key.Matches(msg, mainKeymap.UpdateMinor):
 		m.Rows[m.cursor].AppliedChange = Update_Minor
-	case "3":
+
+	case key.Matches(msg, mainKeymap.UpdatePatch):
 		m.Rows[m.cursor].AppliedChange = Update_Patch
 
 	// The "up" and "k" keys move the cursor up
-	case "up":
+	case key.Matches(msg, mainKeymap.ScrollUp):
 		if m.cursor > 0 {
 			m.cursor--
 			if m.cursor < m.scroll {
@@ -106,7 +138,7 @@ func (m *model) mainUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	// The "down" and "j" keys move the cursor down
-	case "down":
+	case key.Matches(msg, mainKeymap.ScrollDown):
 		if m.cursor < len(m.Rows)-1 {
 			m.cursor++
 			if m.cursor >= m.scroll+m.viewportHeight {
@@ -114,13 +146,13 @@ func (m *model) mainUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case "right":
+	case key.Matches(msg, mainKeymap.IncrementUpdate):
 		m.Rows[m.cursor].AppliedChange = m.Rows[m.cursor].AppliedChange.Increment()
 
-	case "left":
+	case key.Matches(msg, mainKeymap.DecrementUpdate):
 		m.Rows[m.cursor].AppliedChange = m.Rows[m.cursor].AppliedChange.Decrement()
 
-	case "s":
+	case key.Matches(msg, mainKeymap.EditSuffix):
 		row := m.Rows[m.cursor]
 		suffix := row.AppliedSuffix
 		if suffix == "" && row.Version != nil {
@@ -136,18 +168,32 @@ func (m *model) mainUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 type cancelModal struct{}
 type applyInput struct{ Value string }
 
+type editSuffixKeymapType struct {
+	Quit   key.Binding
+	Cancel key.Binding
+	Apply  key.Binding
+}
+
+var editSuffixKeymap = editSuffixKeymapType{
+	Quit:   key.NewBinding(key.WithKeys("ctrl+c")),
+	Cancel: key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Cancel")),
+	Apply:  key.NewBinding(key.WithKeys("enter"), key.WithHelp("Enter", "Accept")),
+}
+
 func (m *model) modalUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Cool, what was the actual key pressed?
 	var cmd tea.Cmd
 
-	switch msg.String() {
-	case "ctrl+c":
+	switch {
+	case key.Matches(msg, editSuffixKeymap.Quit):
 		m.Rows = nil
 		return m, tea.Quit
-	case "esc":
+
+	case key.Matches(msg, editSuffixKeymap.Cancel):
 		return m, func() tea.Msg { return cancelModal{} }
-	case "enter":
+
+	case key.Matches(msg, editSuffixKeymap.Apply):
 		return m, func() tea.Msg { return applyInput{m.input.Value()} }
+
 	default:
 		m.input, cmd = m.input.Update(msg)
 	}
@@ -165,6 +211,7 @@ func (m *model) View() tea.View {
 	buf.WriteRune('\n')
 
 	rowStyle := lipgloss.NewStyle().Padding(0, 1)
+	versionStyle := lipgloss.NewStyle().Inherit(rowStyle).Foreground(lipgloss.BrightBlue)
 	fromStyle := lipgloss.NewStyle().Inherit(rowStyle).Foreground(lipgloss.Red)
 	toStyle := lipgloss.NewStyle().Inherit(rowStyle).Foreground(lipgloss.Green)
 
@@ -187,18 +234,18 @@ func (m *model) View() tea.View {
 		if row.Version != nil {
 			versionString.WriteRune('/')
 
-			if row.AppliedChange != Update_None || row.AppliedSuffix != "" {
+			if row.NeedsUpdate() {
 				versionString.WriteString(fromStyle.Render(row.Version.String()))
-				versionString.WriteString(rowStyle.Render(" -> "))
+				versionString.WriteString(rowStyle.Render(" → "))
 				versionString.WriteString(toStyle.Render(row.UpdateVersion().String()))
-				versionString.WriteString(rowStyle.Render(fmt.Sprintf(" (Update %s)", row.AppliedChange)))
+				versionString.WriteString(rowStyle.Render(fmt.Sprintf(" (Update %s)", row.ChangeDescription())))
 			} else {
-				versionString.WriteString(row.Version.String())
+				versionString.WriteString(versionStyle.Render(row.Version.String()))
 			}
-		} else if row.AppliedChange != Update_None || row.AppliedSuffix != "" {
+		} else if row.NeedsUpdate() {
 			versionString.WriteRune('/')
 			versionString.WriteString(toStyle.Render(row.UpdateVersion().String()))
-			versionString.WriteString(rowStyle.Render(fmt.Sprintf(" (Tag %s)", row.AppliedChange)))
+			versionString.WriteString(rowStyle.Render(fmt.Sprintf(" (Tag %s)", row.ChangeDescription())))
 		}
 
 		buf.WriteString(rowStyle.Render(row.Module + versionString.String()))
@@ -226,7 +273,7 @@ type Row struct {
 }
 
 func (r Row) NeedsUpdate() bool {
-	return r.AppliedChange != Update_None || r.AppliedSuffix != r.Version.Suffix
+	return r.AppliedChange != Update_None || r.suffixUpdated()
 }
 
 func (r Row) UpdateTagName() string {
@@ -240,6 +287,22 @@ func (r Row) UpdateVersion() Version {
 	}
 
 	return v.Apply(r.AppliedChange, r.AppliedSuffix)
+}
+
+func (r Row) suffixUpdated() bool {
+	return (r.Version == nil && r.AppliedSuffix != "") ||
+		(r.Version != nil && r.AppliedSuffix != r.Version.Suffix)
+}
+
+func (r Row) ChangeDescription() string {
+	appliedChange := r.AppliedChange.String()
+	if r.suffixUpdated() {
+		if r.AppliedChange == Update_None {
+			return "Suffix"
+		}
+		appliedChange += " + Suffix"
+	}
+	return appliedChange
 }
 
 type Update int
