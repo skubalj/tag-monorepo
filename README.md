@@ -17,6 +17,23 @@ tag manually in more "interesting" cases.
 
 - Current tag detection for each module
 - Update by major, minor, or patch version
+- Apply tag suffixes, like `beta` or `rc1`
+- Handle modules that are not at the top level
+
+## Depth
+
+When working on monorepos, the modules are usually the top-level directories.
+However, it is also valid to have a versioned module that is inside another
+directory. In these cases, the tag is the full file path, ending with the
+verison number. (for example, generated Go protobufs may be located in a module
+called `proto/go/v0.0.1`)
+
+By default, this program will only display directories that have existing tags.
+This means that in the general case, you get a "focused" view that excludes
+un-tagged folders like "docs" or "scripts". If you want to add a tag for a new
+directory, run the program with the `-d` flag to specify the maximum directory
+depth. The program will then display all directories at or above that depth in
+addition to any directories with tags.
 
 ## Installation
 
@@ -37,6 +54,10 @@ of others.
 | `github.com/alexflint/go-arg` | BSD-2-Clause |
 | `github.com/go-git/go-git/v5` | Apache-2.0   |
 | `github.com/stretchr/testify` | MIT          |
+
+Special thanks are also due to the contributors and maintainers of Git. This
+program (and let's face it, modern software development in general) wouldn't be
+possible without their hard work.
 
 ## License
 

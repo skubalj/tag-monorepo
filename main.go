@@ -105,7 +105,7 @@ func getTags(repositoryPath string) ([]Row, error) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() && !strings.HasPrefix(path, ".git") {
+		if d.IsDir() && path != "." && !strings.HasPrefix(path, ".git") {
 			modules = append(modules, path)
 		}
 		return nil
