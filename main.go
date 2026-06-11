@@ -28,7 +28,7 @@ type Args struct {
 }
 
 func (Args) Version() string {
-	return "tag-monorepo 0.0.1"
+	return "tag-monorepo 0.1.0"
 }
 
 func (Args) Epilogue() string {
