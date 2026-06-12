@@ -257,7 +257,7 @@ func (m *model) View() tea.View {
 		buf.WriteRune('\n')
 	}
 
-	out := lipgloss.NewStyle().Foreground(lipgloss.BrightBlack).Render(`0: Clear Update   1: Update Major   2: Update Minor   3: Update Patch   S: Update Suffix   Enter: Accept     Q: Abort`)
+	out := lipgloss.NewStyle().Foreground(lipgloss.BrightBlack).Render(`0: Clear Update   1: Update Major   2: Update Minor   3: Update Patch   S: Update Suffix   Enter: Accept   Q: Abort`)
 	buf.WriteString(out)
 
 	v.SetContent(buf.String())
@@ -269,7 +269,6 @@ type Row struct {
 	Version       *Version
 	AppliedChange Update
 	AppliedSuffix string
-	Changed       bool
 }
 
 func (r Row) NeedsUpdate() bool {

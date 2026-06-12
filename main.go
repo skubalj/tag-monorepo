@@ -8,10 +8,12 @@ See the COPYING file for copyright information
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -24,11 +26,11 @@ import (
 type Args struct {
 	Copyright      bool   `arg:"-c,--copyright" help:"display GPL copyright notice"`
 	MaxDepth       int    `arg:"-d,--max-depth" help:"show all directories up to the given depth"`
-	RepositoryPath string `arg:"positional" default:"." placeholder:"REPOSITORY_PATH" help:"path to the git repo to be searched"`
+	RepositoryPath string `arg:"positional" placeholder:"REPOSITORY_PATH" help:"path to the git repo to be searched"`
 }
 
 func (Args) Version() string {
-	return "tag-monorepo 0.1.0"
+	return "tag-monorepo 0.1.1"
 }
 
 func (Args) Epilogue() string {
@@ -55,6 +57,20 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.`
 func main() {
 	var args Args
 	arg.MustParse(&args)
+
+	if args.RepositoryPath == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Println("unable to get current working directory:", err.Error())
+			os.Exit(1)
+		}
+
+		args.RepositoryPath, err = findGitDir(cwd)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+	}
 
 	if args.Copyright {
 		fmt.Println(gplCopyrightNotice)
@@ -98,6 +114,20 @@ func main() {
 	}
 }
 
+func findGitDir(startDir string) (string, error) {
+	if startDir == "" {
+		return "", fmt.Errorf("no .git directory found in filesystem tree")
+	}
+
+	_, err := os.Stat(filepath.Join(startDir, ".git"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return findGitDir(filepath.Dir(startDir))
+	} else if err != nil {
+		return "", err
+	}
+	return startDir, nil
+}
+
 // Get the given tags
 func getTags(repositoryPath string) ([]Row, error) {
 	var modules []string
@@ -134,7 +164,6 @@ func getTags(repositoryPath string) ([]Row, error) {
 				Module:        module,
 				Version:       &version.Version,
 				AppliedSuffix: version.Version.Suffix,
-				Changed:       false, // reserved for future use
 			})
 		} else {
 			rows = append(rows, Row{Module: module})
