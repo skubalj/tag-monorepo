@@ -85,6 +85,8 @@ type mainKeymapType struct {
 	UpdatePatch     key.Binding
 	ScrollUp        key.Binding
 	ScrollDown      key.Binding
+	ScrollPageUp    key.Binding
+	ScrollPageDown  key.Binding
 	IncrementUpdate key.Binding
 	DecrementUpdate key.Binding
 	EditSuffix      key.Binding
@@ -99,6 +101,8 @@ var mainKeymap = mainKeymapType{
 	UpdatePatch:     key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "Update Patch")),
 	ScrollUp:        key.NewBinding(key.WithKeys("up")),
 	ScrollDown:      key.NewBinding(key.WithKeys("down")),
+	ScrollPageUp:    key.NewBinding(key.WithKeys("pgup")),
+	ScrollPageDown:  key.NewBinding(key.WithKeys("pgdown")),
 	IncrementUpdate: key.NewBinding(key.WithKeys("right")),
 	DecrementUpdate: key.NewBinding(key.WithKeys("left")),
 	EditSuffix:      key.NewBinding(key.WithKeys("s"), key.WithHelp("S", "Update Suffix")),
@@ -137,6 +141,10 @@ func (m *model) mainUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case key.Matches(msg, mainKeymap.ScrollPageUp):
+		m.cursor = max(m.cursor-m.viewportHeight+1, 0)
+		m.scroll = m.cursor
+
 	// The "down" and "j" keys move the cursor down
 	case key.Matches(msg, mainKeymap.ScrollDown):
 		if m.cursor < len(m.Rows)-1 {
@@ -145,6 +153,10 @@ func (m *model) mainUpdate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.scroll++
 			}
 		}
+
+	case key.Matches(msg, mainKeymap.ScrollPageDown):
+		m.cursor = min(m.cursor+m.viewportHeight-1, len(m.Rows)-1)
+		m.scroll = m.cursor - m.viewportHeight + 1
 
 	case key.Matches(msg, mainKeymap.IncrementUpdate):
 		m.Rows[m.cursor].AppliedChange = m.Rows[m.cursor].AppliedChange.Increment()
