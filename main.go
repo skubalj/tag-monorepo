@@ -30,7 +30,7 @@ type Args struct {
 }
 
 func (Args) Version() string {
-	return "tag-monorepo 0.1.1"
+	return "tag-monorepo 0.1.2"
 }
 
 func (Args) Epilogue() string {
